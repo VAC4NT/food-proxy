@@ -12,7 +12,7 @@
    - `DOUBAO_ENDPOINT_ID`：豆包推理接入点 ID
    - `FOOD_PROXY_AUTH_MODE=cloudbase`
 
-   不要把真实值写入代码、`.env` 或 Git。云托管会自动提供 `PORT`，服务已兼容。
+   不要把真实值写入代码、`.env` 或 Git。云托管发布设置中的容器端口填写 `80`。
 
 4. 部署后访问 `GET /health`，应返回 `{"ok":true}`。
 5. 小程序应通过 `wx.cloud.callContainer` 调用 `POST /food/analyze`，服务名由云托管控制台确定。

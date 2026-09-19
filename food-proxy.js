@@ -30,6 +30,12 @@ function numberFromEnv(name, fallback, min, max) {
   return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.round(value))) : fallback
 }
 
+function resolvePort(production) {
+  const platformPort = Number(process.env.PORT)
+  if (Number.isFinite(platformPort) && platformPort > 0) return Math.max(1, Math.min(65535, Math.round(platformPort)))
+  return numberFromEnv('FOOD_PROXY_PORT', production ? 80 : DEFAULTS.port, 1, 65535)
+}
+
 function readLocalConfig() {
   if (process.env.NODE_ENV === 'production') return {}
   const filePath = path.resolve(__dirname, '../文档/doubaoapi.txt')
@@ -378,10 +384,7 @@ function start() {
   const credentials = getCredentials()
   if (!credentials.apiKey || !credentials.endpointId) throw new Error('DOUBAO_API_KEY and DOUBAO_ENDPOINT_ID are required')
   if (production && (!process.env.DOUBAO_API_KEY || !process.env.DOUBAO_ENDPOINT_ID)) throw new Error('Production must use environment credentials')
-  const platformPort = Number(process.env.PORT)
-  const port = Number.isFinite(platformPort) && platformPort > 0
-    ? Math.max(1, Math.min(65535, Math.round(platformPort)))
-    : numberFromEnv('FOOD_PROXY_PORT', DEFAULTS.port, 1, 65535)
+  const port = resolvePort(production)
   const host = process.env.FOOD_PROXY_HOST || DEFAULTS.host
   const server = createFoodProxyServer({ production })
   server.listen(port, host, () => console.log(`Food recognition proxy listening on http://${host}:${port}`))
@@ -404,4 +407,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { AppError, analyzeFood, callDoubao, createFoodProxyServer, createRateLimiter, detectImageMime, hasCloudBaseIdentity, normalizeModelResult, parseModelJson, start, validateImage }
+module.exports = { AppError, analyzeFood, callDoubao, createFoodProxyServer, createRateLimiter, detectImageMime, hasCloudBaseIdentity, normalizeModelResult, parseModelJson, resolvePort, start, validateImage }
