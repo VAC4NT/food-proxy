@@ -1,0 +1,13 @@
+{
+  "name": "fitness-food-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WeChat CloudBase food recognition proxy for Doubao Vision",
+  "scripts": {
+    "start": "node food-proxy.js",
+    "check": "node --check food-proxy.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
