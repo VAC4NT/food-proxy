@@ -1,6 +1,6 @@
 # Fitness Food Proxy
 
-微信云托管饮食识别服务。接收小程序图片，调用豆包视觉模型，返回结构化菜品和营养估算。
+微信云托管饮食识别服务。小程序先将图片上传到微信云存储，服务端读取临时地址并调用豆包视觉模型，返回结构化菜品和营养估算。
 
 ## 云托管部署
 
@@ -19,13 +19,13 @@
 
 ## 请求
 
-`POST /food/analyze`，请求体：
+`POST /food/analyze`，请求体只传微信云存储生成的临时 HTTPS 地址，避免 `callContainer` 的 100KB 请求体限制：
 
 ```json
-{"imageBase64":"图片 Base64"}
+{"imageUrl":"https://example.tcb.qcloud.la/food.jpg?token=temporary"}
 ```
 
-云托管模式要求平台注入有效的 `X-WX-OPENID` 和 `X-WX-APPID`。不要从普通公网客户端手工添加这些请求头。
+云托管模式要求平台注入有效的 `X-WX-OPENID` 和 `X-WX-APPID`。不要从普通公网客户端手工添加这些请求头。服务端仅允许微信云存储和 COS 域名。
 
 ## 本地检查
 

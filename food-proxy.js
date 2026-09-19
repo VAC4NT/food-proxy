@@ -160,6 +160,52 @@ function validateImage(body, maxImageBytes) {
   return { base64, mimeType }
 }
 
+function isAllowedCloudImageUrl(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    if (url.protocol !== 'https:' || url.username || url.password) return false
+    return host.endsWith('.tcb.qcloud.la') || host.endsWith('.tcb.qcloud.com') ||
+      /\.cos\.[a-z0-9-]+\.myqcloud\.com$/.test(host)
+  } catch (_) { return false }
+}
+
+async function downloadCloudImage(imageUrl, maxImageBytes, options = {}) {
+  const fetchImpl = options.fetchImpl || fetch
+  const allowUrl = options.allowUrl || isAllowedCloudImageUrl
+  let currentUrl = String(imageUrl || '')
+  if (!currentUrl || currentUrl.length > 4096 || !allowUrl(currentUrl)) {
+    throw new AppError(400, 'INVALID_IMAGE_URL', '图片临时地址无效')
+  }
+  for (let redirects = 0; redirects <= 2; redirects++) {
+    let response
+    try {
+      response = await fetchImpl(currentUrl, { redirect: 'manual', signal: AbortSignal.timeout(12000) })
+    } catch (error) {
+      if (error && error.name === 'TimeoutError') throw new AppError(504, 'IMAGE_DOWNLOAD_TIMEOUT', '读取图片超时，请重试', true)
+      throw new AppError(502, 'IMAGE_DOWNLOAD_FAILED', '无法读取临时图片，请重试', true)
+    }
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location')
+      if (!location) throw new AppError(502, 'IMAGE_DOWNLOAD_FAILED', '图片临时地址返回异常', true)
+      currentUrl = new URL(location, currentUrl).toString()
+      if (!allowUrl(currentUrl)) throw new AppError(400, 'INVALID_IMAGE_URL', '图片临时地址无效')
+      continue
+    }
+    if (!response.ok) throw new AppError(502, 'IMAGE_DOWNLOAD_FAILED', '无法读取临时图片，请重试', true)
+    const declaredSize = Number(response.headers.get('content-length'))
+    if (Number.isFinite(declaredSize) && declaredSize > maxImageBytes) {
+      throw new AppError(413, 'IMAGE_TOO_LARGE', '图片过大，请压缩到 6MB 以内')
+    }
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (buffer.length > maxImageBytes) throw new AppError(413, 'IMAGE_TOO_LARGE', '图片过大，请压缩到 6MB 以内')
+    const mimeType = detectImageMime(buffer)
+    if (!mimeType) throw new AppError(415, 'UNSUPPORTED_IMAGE', '仅支持 JPEG、PNG 或 WebP 图片')
+    return { base64: buffer.toString('base64'), mimeType }
+  }
+  throw new AppError(502, 'IMAGE_DOWNLOAD_FAILED', '图片临时地址重定向过多', true)
+}
+
 function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 async function callDoubao(payload, credentials, options = {}) {
@@ -199,7 +245,10 @@ async function callDoubao(payload, credentials, options = {}) {
 async function analyzeFood(body, options = {}) {
   const credentials = options.credentials || getCredentials()
   if (!credentials.apiKey || !credentials.endpointId) throw new AppError(503, 'SERVICE_NOT_CONFIGURED', '识别服务尚未配置')
-  const image = validateImage(body, options.maxImageBytes || DEFAULTS.maxImageBytes)
+  const maxImageBytes = options.maxImageBytes || DEFAULTS.maxImageBytes
+  const image = body && body.imageUrl
+    ? await downloadCloudImage(body.imageUrl, maxImageBytes, options)
+    : validateImage(body, maxImageBytes)
   const prompt = [
     '独立观察并识别照片中实际可见的全部食物，不参考预设菜名。',
     '只输出 JSON，不要 Markdown。结构为：',
@@ -407,4 +456,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { AppError, analyzeFood, callDoubao, createFoodProxyServer, createRateLimiter, detectImageMime, hasCloudBaseIdentity, normalizeModelResult, parseModelJson, resolvePort, start, validateImage }
+module.exports = { AppError, analyzeFood, callDoubao, createFoodProxyServer, createRateLimiter, detectImageMime, downloadCloudImage, hasCloudBaseIdentity, isAllowedCloudImageUrl, normalizeModelResult, parseModelJson, resolvePort, start, validateImage }
